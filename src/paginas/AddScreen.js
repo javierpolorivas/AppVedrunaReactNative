@@ -7,7 +7,7 @@ import { auth } from '../utils/Firebase';
 const CLOUD_NAME = "du4de31nr";
 const UPLOAD_PRESET = "FotosAppVedruna";
 const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
-const SERVER_URL = 'http://192.168.68.105:8080/proyecto01/publicaciones';
+const SERVER_URL = 'http://192.168.68.106:8080/proyecto01/publicaciones';
 
 export function AddScreen() {
     const navigation = useNavigation();

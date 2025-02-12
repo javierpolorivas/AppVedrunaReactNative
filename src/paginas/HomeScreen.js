@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Image, FlatList, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/FontAwesome';
 import { auth } from '../utils/Firebase';
 
-// Función para calcular fecha 
 const timeAgo = (date) => {
   const now = new Date();
-  const diff = now - new Date(date); 
+  const diff = now - new Date(date);
 
   const seconds = Math.floor(diff / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -24,7 +23,7 @@ const timeAgo = (date) => {
   }
 };
 
-export function HomeScreen() {
+export function HomeScreen({ navigation }) {
   const [publicaciones, setPublicaciones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('');
@@ -41,21 +40,34 @@ export function HomeScreen() {
   }, []);
 
   const fetchPublicaciones = async () => {
+    const url = 'http://192.168.68.106:8080/proyecto01/publicaciones';
+    
     try {
-      const url = 'http://192.168.68.105:8080/proyecto01/publicaciones';
       const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error('Error al obtener publicaciones');
+      let publicaciones = await response.json();
+  
+      for (let i = 0; i < publicaciones.length; i++) {
+        const pubId = publicaciones[i].id;
+        const comentariosUrl = `http://192.168.68.106:8080/proyecto01/comentarios/${pubId}`;
+        
+        try {
+          const comentariosResponse = await fetch(comentariosUrl);
+          const comentariosData = await comentariosResponse.json();
+          publicaciones[i].comentarios = comentariosData || [];
+        } catch (error) {
+          console.error(`Error obteniendo comentarios para ${pubId}:`, error);
+          publicaciones[i].comentarios = []; 
+        }
       }
-
-      const data = await response.json();
-      setPublicaciones(data || []);
+  
+      console.log("Publicaciones con comentarios:", publicaciones);
+      setPublicaciones(publicaciones);
+  
     } catch (error) {
       console.error('Error al obtener publicaciones:', error);
-    } finally {
-      setLoading(false);
     }
   };
+  
 
   const handleLike = async (id) => {
     try {
@@ -77,7 +89,7 @@ export function HomeScreen() {
 
       setPublicaciones(updatedPublicaciones);
 
-      const url = `http://192.168.68.105:8080/proyecto01/publicaciones/put/${id}/${userId}`;
+      const url = `http://192.168.68.106:8080/proyecto01/publicaciones/put/${id}/${userId}`;
       const response = await fetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -94,62 +106,67 @@ export function HomeScreen() {
     }
   };
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Icon name="arrow-left" size={20} color="#9FC63B" />
-        <View style={styles.userInfo}>
-          <View style={styles.userDetails}>
-            <Image
-              source={require('../../assets/perfil.png')}  
-              style={styles.userPhoto}
-            />
-            <View>
-              <Text style={styles.publishedBy}>Publicado por</Text>
-              <Text style={styles.userName}>{userName}</Text>
-            </View>
+  const renderItem = ({ item }) => (
+    <View key={item.id} style={styles.publicacion}>
+      <TouchableOpacity onPress={() => navigation.navigate('PublicacionScreen', { selectedPostId: item.id })}>
+        <Image
+          source={{ uri: item.image_url }}
+          style={styles.image}
+          onError={(e) =>
+            console.log('Error al cargar la imagen:', e.nativeEvent.error)
+          }
+        />
+      </TouchableOpacity>
+      <View style={styles.overlay}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Icon name="arrow-left" size={20} color="#9FC63B" />
+        </TouchableOpacity>
+        <View style={styles.userDetails}>
+          <Image
+            source={require('../../assets/perfil.png')}
+            style={styles.userPhoto}
+          />
+          <View style={styles.userTextContainer}>
+            <Text style={styles.publishedBy}>Publicado por</Text>
+            <Text style={styles.userName}>{userName}</Text>
+            <Text style={styles.date}>{timeAgo(item.createdAt)}</Text>
           </View>
         </View>
       </View>
+      <View style={styles.likeContainer}>
+        <TouchableOpacity onPress={() => handleLike(item.id)}>
+          <Icon
+            name={userLikes.has(item.id) ? 'heart' : 'heart-o'}
+            size={24}
+            color={userLikes.has(item.id) ? '#9FC63B' : '#ffffff'}
+          />
+        </TouchableOpacity>
+        <Text style={styles.likeCount}>{item.likes || 0} Me gusta</Text>
+      </View>
+      <Text style={styles.title}>{item.titulo}</Text>
+      <Text style={styles.description}>{item.comentario}</Text>
+      <Text style={styles.commentCount}>
+      {Array.isArray(item.comentarios) && item.comentarios.length
+        ? `${item.comentarios.length} comentario${item.comentarios.length > 1 ? 's' : ''}`
+        : 'Sin comentarios'}
+      </Text>
+    </View>
+  );
 
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#ffffff" />
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={styles.imageContainer}>
-          {publicaciones.length > 0 ? (
-            publicaciones.map((publicacion) => {
-              return (
-                <View key={publicacion.id} style={styles.publicacion}>
-                  <Image
-                    source={{ uri: publicacion.image_url }}
-                    style={styles.image}
-                    onError={(e) =>
-                      console.log('Error al cargar la imagen:', e.nativeEvent.error)
-                    }
-                  />
-                  <View style={styles.likeContainer}>
-                    <TouchableOpacity onPress={() => handleLike(publicacion.id)}>
-                      <Icon
-                        name={userLikes.has(publicacion.id) ? 'heart' : 'heart-o'}
-                        size={24}
-                        color={userLikes.has(publicacion.id) ? '#ff0000' : '#ffffff'}
-                      />
-                    </TouchableOpacity>
-                    <Text style={styles.likeCount}>{publicacion.likes || 0} Me gusta</Text>
-                  </View>
-                  <Text style={styles.title}>{publicacion.titulo}</Text>
-                  <Text style={styles.description}>{publicacion.comentario}</Text>
-                  <Text style={styles.date}>{timeAgo(publicacion.createdAt)}</Text>
-                </View>
-              );
-            })
-          ) : (
-            <Text style={styles.noPublicaciones}>No hay publicaciones disponibles.</Text>
-          )}
-        </ScrollView>
-      )}
+  return (
+    <View style={styles.container}>
+      <Image source={require("../../assets/cabecera.png")} style={styles.logo} />
+      <FlatList
+        data={publicaciones}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id.toString()}
+        contentContainerStyle={styles.imageContainer}
+        ListEmptyComponent={
+          <Text style={styles.noPublicaciones}>
+            No hay publicaciones disponibles.
+          </Text>
+        }
+      />
     </View>
   );
 }
@@ -159,21 +176,44 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#23272A',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  imageContainer: {
+    padding: 10,
+    flexGrow: 1, 
+  },
+  publicacion: {
+    marginBottom: 20,
     backgroundColor: '#23272A',
     padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    position: 'relative',
   },
-  userInfo: {
-    marginLeft: 10,
-    flex: 1,
+  image: {
+    width: '100%',
+    height: 200,
+    marginBottom: 10,
+  },
+  overlay: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 1,
   },
   userDetails: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginLeft: 10,
+  },
+  userPhoto: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 10,
+    borderWidth: 2,
+    borderColor: '#9FC63B',
+  },
+  userTextContainer: {
+    marginLeft: 10,
   },
   publishedBy: {
     color: '#cccccc',
@@ -183,28 +223,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     fontWeight: 'bold',
-    flexShrink: 1,
-  },
-  userPhoto: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
-    borderWidth: 2,
-    borderColor: '#9FC63B',  
-  },
-  imageContainer: {
-    padding: 10,
-  },
-  publicacion: {
-    marginBottom: 20,
-    backgroundColor: '#23272A',
-    padding: 10,
-  },
-  image: {
-    width: '100%',
-    height: 200,
-    marginBottom: 10,
   },
   likeContainer: {
     flexDirection: 'row',
@@ -232,16 +250,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontStyle: 'italic',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#23272A',
+  logo: {
+    width: '100%',
+    height: 90,
+    marginBottom: 20,
   },
   noPublicaciones: {
-    color: '#23272A',
+    color: '#ffffff',
     textAlign: 'center',
     fontSize: 16,
     marginTop: 20,
+  },
+  commentCount: {
+    color: '#888888',
+    fontSize: 12,
+    marginTop: 5,
+    fontStyle: 'italic',
   },
 });
